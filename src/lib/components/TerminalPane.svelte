@@ -14,6 +14,8 @@
     import * as syncStatus from "../stores/sync.svelte.ts";
     import * as ai from "../ai/store.svelte.ts";
     import * as theme from "../themes/store.svelte.ts";
+    import {groupWaveColor} from "../terminal/environment-wave.ts";
+    import EnvironmentWave from "./EnvironmentWave.svelte";
     import MobileKeybar from "./MobileKeybar.svelte";
     import {registerRsshOscHandlers} from "../osc/handler.ts";
     import {registerClipboardOscHandler} from "../osc/clipboard.ts";
@@ -96,6 +98,39 @@
         meta: Record<string, string>;
         onInitialConnectionFailure?: (tabId: string, error: unknown) => boolean;
     } = $props();
+
+    let environmentGroup = $state<app.Group | null>(null);
+    let waveColor = $derived(groupWaveColor(environmentGroup));
+    let baseTermTheme = $state(theme.currentTermTheme());
+
+    $effect(() => {
+        syncStatus.configurationRevision();
+        const command = tabType === "ssh" ? "get_profile"
+            : tabType === "telnet" ? "get_telnet_profile"
+            : tabType === "serial" ? "get_serial_profile" : null;
+        const id = tabType === "serial" ? meta.serialProfileId : meta.profileId;
+        let cancelled = false;
+        if (command && id) {
+            void Promise.all([
+                invoke<{group_id: string | null}>(command, {id}), app.loadGroups(),
+            ]).then(([profile, groups]) => {
+                if (!cancelled) environmentGroup = groups.find(g => g.id === profile.group_id) ?? null;
+            }).catch(e => {
+                if (!cancelled) {
+                    environmentGroup = null;
+                    console.warn("[terminal] environment group lookup failed:", e);
+                }
+            });
+        } else {
+            environmentGroup = null;
+        }
+        return () => { cancelled = true; };
+    });
+
+    $effect(() => {
+        const colors = baseTermTheme;
+        if (terminal) terminal.options.theme = colors;
+    });
 
     let containerEl: HTMLDivElement;
     let paneEl: HTMLDivElement; // the .term-outer root — soft-keyboard inset target
@@ -1547,7 +1582,7 @@
             // users cannot select at all in mouse mode. Match iTerm2's Option-drag.
             macOptionClickForcesSelection: true,
             */
-            theme: theme.currentTermTheme(),
+            theme: baseTermTheme,
             // xterm 6 draws its own scrollbar at overviewRuler.width||14 (=14px),
             // out of reach of the global ::-webkit-scrollbar; pin it to the app's 6px.
             overviewRuler: { width: 6 },
@@ -1555,7 +1590,7 @@
         // Listener fires immediately with current theme (already applied above)
         // and on every palette change. Keep the unsubscribe for onDestroy.
         unsubscribeTheme = theme.registerXtermThemeListener((t) => {
-            if (terminal) terminal.options.theme = t;
+            baseTermTheme = t;
         });
         fitAddon = new FitAddon();
         searchAddon = new SearchAddon();
@@ -1952,7 +1987,7 @@
     });
 </script>
 
-<div class="term-outer" bind:this={paneEl}>
+<div class="term-outer" bind:this={paneEl} style="--term-bg: {baseTermTheme.background}">
     {#if showSearch}
         <div class="search-bar">
             <input
@@ -2050,6 +2085,9 @@
             {/each}
         {/if}
     </div>
+    {#if waveColor && environmentGroup}
+        <EnvironmentWave color={waveColor} name={environmentGroup.name} foreground={baseTermTheme.foreground} />
+    {/if}
     {#if ctxMenu}
         <BlockContextMenu
             x={ctxMenu.x}
@@ -2065,6 +2103,7 @@
 
 <style>
     .term-outer {
+        background: var(--term-bg);
         display: flex;
         flex-direction: column;
         width: 100%;
@@ -2072,6 +2111,7 @@
     }
 
     .term-wrap {
+        background: var(--term-bg);
         flex: 1;
         min-height: 0;
         position: relative;

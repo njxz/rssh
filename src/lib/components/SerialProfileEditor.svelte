@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { invalidateConfiguration } from "../stores/sync.svelte.ts";
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import * as app from "../stores/app.svelte.ts";
@@ -125,6 +126,7 @@
       };
       if (id) await invoke("update_serial_profile", { profile });
       else await invoke("create_serial_profile", { profile });
+      invalidateConfiguration();
       app.navigate("connections");
     } catch (e: any) { toast.error(`${t("toast.error.save")}: ${errMsg(e)}`); }
     finally { saving = false; }
