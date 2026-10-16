@@ -889,6 +889,7 @@ const zh: Messages = {
   "error.telnet_login_script_missing": "Telnet 配置 {id} 的加密登录脚本缺失。",
   "error.telnet_login_script_epoch_invalid": "Telnet 登录脚本迁移状态无效：{key}",
   "error.session_id_invalid": "会话标识无效",
+  "error.configuration_event_invalid": "配置变更通知无效",
   "error.session_id_conflict": "会话「{id}」已存在",
   "error.session_reservation_lost": "会话「{id}」在启动时已被关闭",
   "error.task_join_failed": "后台任务失败：{err}",

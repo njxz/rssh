@@ -14,7 +14,8 @@
     import * as syncStatus from "../stores/sync.svelte.ts";
     import * as ai from "../ai/store.svelte.ts";
     import * as theme from "../themes/store.svelte.ts";
-    import {groupWaveColor} from "../terminal/environment-wave.ts";
+    import {groupWaveColor, environmentWaveLayout} from "../terminal/environment-wave.ts";
+    import {watchEnvironmentGroup} from "../terminal/watch-environment-group.ts";
     import EnvironmentWave from "./EnvironmentWave.svelte";
     import MobileKeybar from "./MobileKeybar.svelte";
     import {registerRsshOscHandlers} from "../osc/handler.ts";
@@ -101,6 +102,8 @@
 
     let environmentGroup = $state<app.Group | null>(null);
     let waveColor = $derived(groupWaveColor(environmentGroup));
+    let paneHeight = $state(0);
+    let waveLayout = $derived(environmentWaveLayout(paneHeight));
     let baseTermTheme = $state(theme.currentTermTheme());
 
     $effect(() => {
@@ -109,22 +112,14 @@
             : tabType === "telnet" ? "get_telnet_profile"
             : tabType === "serial" ? "get_serial_profile" : null;
         const id = tabType === "serial" ? meta.serialProfileId : meta.profileId;
-        let cancelled = false;
         if (command && id) {
-            void Promise.all([
-                invoke<{group_id: string | null}>(command, {id}), app.loadGroups(),
-            ]).then(([profile, groups]) => {
-                if (!cancelled) environmentGroup = groups.find(g => g.id === profile.group_id) ?? null;
-            }).catch(e => {
-                if (!cancelled) {
-                    environmentGroup = null;
-                    console.warn("[terminal] environment group lookup failed:", e);
-                }
-            });
+            return watchEnvironmentGroup(id,
+                () => invoke<{group_id: string | null}>(command, {id}), app.loadGroups,
+                group => { environmentGroup = group; },
+                error => console.warn("[terminal] environment group lookup failed:", error));
         } else {
             environmentGroup = null;
         }
-        return () => { cancelled = true; };
     });
 
     $effect(() => {
@@ -1654,6 +1649,9 @@
         // Resize for the whole pane lifetime, even if async setup or the
         // initial connection exits early.
         resizeObs = new ResizeObserver((entries) => {
+            // Reuse the existing pane lifecycle observer. CSS size containment
+            // would change the containing block of fixed terminal context menus.
+            paneHeight = paneEl.clientHeight;
             // Skip fitting when the container is hidden (display:none
             // collapses dimensions to zero) — fitting at 0×0 corrupts
             // xterm's column count and causes the narrow-tab bug.
@@ -2085,8 +2083,8 @@
             {/each}
         {/if}
     </div>
-    {#if waveColor && environmentGroup}
-        <EnvironmentWave color={waveColor} name={environmentGroup.name} foreground={baseTermTheme.foreground} />
+    {#if waveColor && environmentGroup && waveLayout.visible}
+        <EnvironmentWave color={waveColor} name={environmentGroup.name} foreground={baseTermTheme.foreground} showName={waveLayout.showName} />
     {/if}
     {#if ctxMenu}
         <BlockContextMenu
@@ -2103,6 +2101,7 @@
 
 <style>
     .term-outer {
+        min-height: 0;
         background: var(--term-bg);
         display: flex;
         flex-direction: column;

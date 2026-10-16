@@ -6,7 +6,7 @@
   import { toast } from "../stores/toast.svelte.ts";
   import { t, errMsg } from "../i18n/index.svelte.ts";
   import AppIcon from "./AppIcon.svelte";
-  import { invalidateConfiguration } from "../stores/sync.svelte.ts";
+  import { notifyEnvironmentChanged } from "../terminal/environment-events.ts";
   import EnvironmentWave from "./EnvironmentWave.svelte";
   import * as theme from "../themes/store.svelte.ts";
 
@@ -63,7 +63,7 @@
     };
     try {
       await invoke("create_group", { group });
-      invalidateConfiguration();
+      await notifyEnvironmentChanged("group", group.id);
       adding = false;
       await refresh();
     } catch (e: any) { toast.error(`${t("toast.error.add")}: ${errMsg(e)}`); }
@@ -80,7 +80,7 @@
     };
     try {
       await invoke("update_group", { group });
-      invalidateConfiguration();
+      await notifyEnvironmentChanged("group", group.id);
       editId = null;
       await refresh();
     } catch (e: any) { toast.error(`${t("toast.error.save")}: ${errMsg(e)}`); }
@@ -90,7 +90,7 @@
     deleting = id;
     try {
       await invoke("delete_group", { id });
-      invalidateConfiguration();
+      await notifyEnvironmentChanged("group", id);
       if (editId === id) editId = null;
       await refresh();
     } catch (e: any) { toast.error(`${t("toast.error.delete")}: ${errMsg(e)}`); }

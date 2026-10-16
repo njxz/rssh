@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { groupWaveColor } from "./environment-wave";
+import { groupWaveColor, environmentWaveLayout } from "./environment-wave";
 
 describe("group terminal waves", () => {
+  it("keeps small and nested split panes usable while preserving normal-size decorations", () => {
+    for (const height of [0, 40, 107, 239]) {
+      expect(environmentWaveLayout(height)).toEqual({visible: false, showName: false});
+    }
+    expect(environmentWaveLayout(240)).toEqual({visible: true, showName: false});
+    expect(environmentWaveLayout(311)).toEqual({visible: true, showName: false});
+    expect(environmentWaveLayout(320)).toEqual({visible: true, showName: true});
+    expect(environmentWaveLayout(800)).toEqual({visible: true, showName: true});
+  });
   const production = {
     id: "prod", name: "Production", color: "#E05868", sort_order: 0,
     terminal_background: "#3B1518",

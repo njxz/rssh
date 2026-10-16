@@ -1,9 +1,10 @@
 <script lang="ts">
-  let { color, name, foreground = "var(--text)", compact = false }: {
+  let { color, name, foreground = "var(--text)", compact = false, showName = true }: {
     color: string;
     name: string;
     foreground?: string;
     compact?: boolean;
+    showName?: boolean;
   } = $props();
 
   const uid = $props.id();
@@ -25,15 +26,18 @@
     <path d="M0 45 C180 -8 245 14 410 64 S650 18 810 58 S1130 73 1260 43 S1370 26 1440 28 V160 H0 Z" fill={`url(#${uid}-back)`} />
     <path d="M0 67 C210 2 300 15 515 67 S830 112 1040 87 S1270 30 1440 60 V160 H0 Z" fill={`url(#${uid}-fill)`} />
   </svg>
-  <div class="group-name" title={name}><span aria-hidden="true">—</span> {name}</div>
+  {#if showName}
+    <div class="group-name" title={name}><span aria-hidden="true">—</span> {name}</div>
+  {/if}
 </div>
 
 <style>
   .environment-wave {
     position: relative;
-    flex: 0 0 auto;
+    flex: 0 1 auto;
     width: 100%;
-    height: clamp(64px, 15%, 150px);
+    height: min(15%, 150px);
+    min-height: 0;
     overflow: hidden;
     pointer-events: none;
     user-select: none;
@@ -56,8 +60,8 @@
   .group-name span { margin-right: 8px; opacity: 0.5; }
   .compact { height: 56px; }
   .compact .group-name { right: 12px; bottom: 10px; font-size: 11px; }
-  @media (max-width: 600px), (max-height: 500px) {
-    .environment-wave { height: 48px; }
+  @media (max-width: 600px) {
+    .environment-wave { max-height: 48px; }
     .group-name { right: 16px; bottom: 10px; font-size: 11px; }
   }
 </style>
