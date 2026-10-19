@@ -212,8 +212,8 @@ export function installTauriShim(): void {
     };
 
     function invoke(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
-        // Listener bookkeeping stays local; the scoped emit path below uses
-        // the same WS event protocol for delivery across authenticated clients.
+        // The event-plugin pseudo-commands are bookkeeping — they never hit the
+        // wire as real commands; the WS event push is what drives delivery.
         if (cmd === "plugin:event|listen") {
             const { event, handler } = (args ?? {}) as { event: string; handler: number };
             let set = listeners.get(event);
@@ -230,12 +230,7 @@ export function installTauriShim(): void {
             return Promise.resolve();
         }
         if (cmd === "plugin:event|emit" || cmd === "plugin:event|emit_to") {
-            // Relay only resource-scoped configuration invalidations; session
-            // output and auth events must retain their connection ownership.
-            if (cmd === "plugin:event|emit" &&
-                /^(group|connection):changed:[A-Za-z0-9_-]{1,128}$/.test(String(args?.event ?? ""))) {
-                return wsInvoke(cmd, { event: args!.event });
-            }
+            // Frontend→backend emit: not needed by the tracer; no-op.
             return Promise.resolve();
         }
         // Browser-environment commands (clipboard / open / file dialogs).

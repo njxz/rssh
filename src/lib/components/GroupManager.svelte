@@ -6,7 +6,6 @@
   import { toast } from "../stores/toast.svelte.ts";
   import { t, errMsg } from "../i18n/index.svelte.ts";
   import AppIcon from "./AppIcon.svelte";
-  import { notifyEnvironmentChanged } from "../terminal/environment-events.ts";
   import EnvironmentWave from "./EnvironmentWave.svelte";
   import * as theme from "../themes/store.svelte.ts";
 
@@ -18,7 +17,7 @@
   let formName = $state("");
   let formColor = $state("#4A6CF7");
   let formOrder = $state(0);
-  let formBackgroundEnabled = $state(false);
+  let formWavesEnabled = $state(false);
   let previewTheme = $derived(theme.currentTermTheme());
 
   let deleting = $state<string | null>(null);
@@ -35,7 +34,7 @@
     formName = "";
     formColor = "#4A6CF7";
     formOrder = 0;
-    formBackgroundEnabled = false;
+    formWavesEnabled = false;
   }
 
   function startEdit(g: Group) {
@@ -44,7 +43,7 @@
     formName = g.name;
     formColor = g.color;
     formOrder = g.sort_order;
-    formBackgroundEnabled = !!g.terminal_background;
+    formWavesEnabled = g.terminal_waves_enabled;
   }
 
   function cancelForm() {
@@ -59,11 +58,10 @@
       name: formName.trim(),
       color: formColor,
       sort_order: formOrder,
-      terminal_background: formBackgroundEnabled ? formColor : null,
+      terminal_waves_enabled: formWavesEnabled,
     };
     try {
       await invoke("create_group", { group });
-      await notifyEnvironmentChanged("group", group.id);
       adding = false;
       await refresh();
     } catch (e: any) { toast.error(`${t("toast.error.add")}: ${errMsg(e)}`); }
@@ -76,11 +74,10 @@
       name: formName.trim(),
       color: formColor,
       sort_order: formOrder,
-      terminal_background: formBackgroundEnabled ? formColor : null,
+      terminal_waves_enabled: formWavesEnabled,
     };
     try {
       await invoke("update_group", { group });
-      await notifyEnvironmentChanged("group", group.id);
       editId = null;
       await refresh();
     } catch (e: any) { toast.error(`${t("toast.error.save")}: ${errMsg(e)}`); }
@@ -90,7 +87,6 @@
     deleting = id;
     try {
       await invoke("delete_group", { id });
-      await notifyEnvironmentChanged("group", id);
       if (editId === id) editId = null;
       await refresh();
     } catch (e: any) { toast.error(`${t("toast.error.delete")}: ${errMsg(e)}`); }
@@ -100,11 +96,11 @@
 
 {#snippet backgroundFields()}
   <label class="background-toggle">
-    <input type="checkbox" bind:checked={formBackgroundEnabled} />
+    <input type="checkbox" bind:checked={formWavesEnabled} />
     {t("group.terminal_background")}
   </label>
   <p class="background-hint">{t("group.terminal_background_hint")}</p>
-  {#if formBackgroundEnabled}
+  {#if formWavesEnabled}
     <div class="terminal-preview" style:background={previewTheme.background} style:color={previewTheme.foreground}>
       <div class="preview-content">{formName || t("group.name_placeholder")} ~ # <span>{t("group.preview")}</span></div>
       <EnvironmentWave color={formColor} />
@@ -155,7 +151,7 @@
           <div class="item-text">
             <div class="item-name" title={g.name}>{g.name}</div>
             <div class="item-sub">{t("group.order", { n: g.sort_order })}</div>
-            {#if g.terminal_background}
+            {#if g.terminal_waves_enabled}
               <div class="item-sub">{t("group.terminal_background")}: {g.color}</div>
             {/if}
           </div>

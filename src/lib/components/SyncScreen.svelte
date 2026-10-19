@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { withEnvironmentUpdates } from "../terminal/environment-import.ts";
     import {onMount, onDestroy} from "svelte";
     import {invoke} from "@tauri-apps/api/core";
     import { t, errMsg } from "../i18n/index.svelte.ts";
@@ -311,9 +310,7 @@
         setSyncing(true);
         setMessage("");
         try {
-            const operation = () => invoke(syncStatus.commandFor(source, action), { password });
-            if (action === "pull") await withEnvironmentUpdates(operation);
-            else await operation();
+            await invoke(syncStatus.commandFor(source, action), { password });
             const revisionBeforeRefresh = syncStatus.configurationRevision();
             const key = `${source}.${action}_ok` as MessageKey;
             setMessage(t(key));

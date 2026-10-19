@@ -30,7 +30,7 @@ pub fn cmd_list_groups(conn: &CliCtx) -> AppResult<()> {
             group.name,
             group.color,
             group.sort_order,
-            if group.terminal_background.is_some() {
+            if group.terminal_waves_enabled {
                 "on"
             } else {
                 "off"
@@ -44,13 +44,13 @@ pub fn cmd_add_group(conn: &CliCtx) -> AppResult<()> {
     let name = prompt("Name: ");
     let color = prompt_default("Color (#RRGGBB)", "#4A6CF7");
     let sort_order = prompt_default("Sort order", "0");
-    let terminal_background = wave_prompt(&color, false);
+    let terminal_waves_enabled = confirm("Show group-color terminal waves", false);
     let group = Group {
         id: uuid::Uuid::new_v4().to_string(),
         name,
         color,
         sort_order: parse_sort_order(&sort_order)?,
-        terminal_background,
+        terminal_waves_enabled,
     };
     rssh_lib::db::group::insert(conn, &group)?;
     println!("Group '{}' created.", group.name);
@@ -68,8 +68,10 @@ pub fn cmd_edit_group(conn: &CliCtx, name: &str) -> AppResult<()> {
     updated.color = prompt_default("Color (#RRGGBB)", &current.color);
     let sort_order = prompt_default("Sort order", &current.sort_order.to_string());
     updated.sort_order = parse_sort_order(&sort_order)?;
-    updated.terminal_background =
-        wave_prompt(&updated.color, current.terminal_background.is_some());
+    updated.terminal_waves_enabled = confirm(
+        "Show group-color terminal waves",
+        current.terminal_waves_enabled,
+    );
 
     rssh_lib::db::group::update(conn, &updated)?;
     println!("Group '{}' updated.", updated.name);
@@ -90,8 +92,4 @@ pub fn cmd_rm_group(conn: &CliCtx, name: &str) -> AppResult<()> {
     rssh_lib::db::group::delete(conn, &id)?;
     println!("Deleted.");
     Ok(())
-}
-
-fn wave_prompt(color: &str, enabled: bool) -> Option<String> {
-    confirm("Show group-color terminal waves", enabled).then(|| color.to_owned())
 }

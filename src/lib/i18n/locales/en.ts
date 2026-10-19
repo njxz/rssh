@@ -886,7 +886,6 @@ const en = {
   "error.telnet_login_script_missing": "The encrypted Telnet login script is missing for profile {id}.",
   "error.telnet_login_script_epoch_invalid": "Invalid Telnet login-script migration state: {key}",
   "error.session_id_invalid": "Invalid session identifier",
-  "error.configuration_event_invalid": "Invalid configuration change notification",
   "error.session_id_conflict": "Session '{id}' already exists",
   "error.session_reservation_lost": "Session '{id}' was closed while it was starting",
   "error.task_join_failed": "Background task failed: {err}",
@@ -1078,7 +1077,7 @@ const en = {
   "forward.name_placeholder": "Web Forward",
   // Groups
   "group.terminal_background": "Terminal wave background",
-  "group.terminal_background_hint": "Blend group-color gradient waves into the right side of SSH, Telnet and serial terminals without taking up space.",
+  "group.terminal_background_hint": "Blend group-color gradient waves into the right side of SSH, Telnet and serial terminals without taking up space. Changes apply to newly opened terminals.",
   "group.preview": "Session preview",
   "group.new": "+ New Group",
   "group.empty": "No groups yet",

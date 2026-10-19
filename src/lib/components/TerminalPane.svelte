@@ -14,8 +14,7 @@
     import * as syncStatus from "../stores/sync.svelte.ts";
     import * as ai from "../ai/store.svelte.ts";
     import * as theme from "../themes/store.svelte.ts";
-    import {groupWaveColor} from "../terminal/environment-wave.ts";
-    import {watchEnvironmentGroup} from "../terminal/watch-environment-group.ts";
+    import {loadTerminalWaveColor, terminalWaveTheme} from "../terminal/environment-wave.ts";
     import EnvironmentWave from "./EnvironmentWave.svelte";
     import MobileKeybar from "./MobileKeybar.svelte";
     import {registerRsshOscHandlers} from "../osc/handler.ts";
@@ -100,28 +99,11 @@
         onInitialConnectionFailure?: (tabId: string, error: unknown) => boolean;
     } = $props();
 
-    let environmentGroup = $state<app.Group | null>(null);
-    let waveColor = $derived(groupWaveColor(environmentGroup));
+    let waveColor = $state<string | null>(null);
     let baseTermTheme = $state(theme.currentTermTheme());
 
     $effect(() => {
-        syncStatus.configurationRevision();
-        const command = tabType === "ssh" ? "get_profile"
-            : tabType === "telnet" ? "get_telnet_profile"
-            : tabType === "serial" ? "get_serial_profile" : null;
-        const id = tabType === "serial" ? meta.serialProfileId : meta.profileId;
-        if (command && id) {
-            return watchEnvironmentGroup(id,
-                () => invoke<{group_id: string | null}>(command, {id}), app.loadGroups,
-                group => { environmentGroup = group; },
-                error => console.warn("[terminal] environment group lookup failed:", error));
-        } else {
-            environmentGroup = null;
-        }
-    });
-
-    $effect(() => {
-        const colors = { ...baseTermTheme, background: waveColor ? "#00000000" : baseTermTheme.background };
+        const colors = terminalWaveTheme(baseTermTheme, !!waveColor);
         if (terminal) terminal.options.theme = colors;
     });
 
@@ -541,7 +523,7 @@
             // fails. ClipboardItem receives the promise while the user gesture
             // is still active, so the async read does not break clipboard access.
             const pngPromise = app.loadCommandBlockRedaction(true)
-                .then((redaction) => renderBlocksToBlob(term, blocks, {}, fs, redaction))
+                .then((redaction) => renderBlocksToBlob(term, blocks, { theme: baseTermTheme }, fs, redaction))
                 .then((blob) => {
                     if (!blob) throw new Error("render produced no blob");
                     return blob;
@@ -649,6 +631,7 @@
     // The active pane's keyboard toggle, built by setupMobileSoftKeyboard and
     // registered in the activation effect (see below for why not at mount).
     let softKbToggle: (() => void) | null = null;
+    const togglePaneKeyboard = () => softKbToggle?.();
     let mobileTouchScrollCleanup: (() => void) | undefined;
 
     const isLocal = $derived(tabType === "local");
@@ -1532,7 +1515,6 @@
             else helper.setAttribute("style", originalHelperStyle);
             helper.removeEventListener("focus", onFocus);
             helper.removeEventListener("blur", onBlur);
-            if (softKbToggle) app.unregisterSoftKeyboardToggle(softKbToggle);
             softKbToggle = null;
             helper.removeEventListener("input", keepKeyboardHelperInView);
             helper.removeEventListener("keydown", keepKeyboardHelperInView);
@@ -1558,6 +1540,19 @@
     }
 
     onMount(async () => {
+        const focusBeforeInit = document.activeElement;
+        // Transparency is fixed when xterm opens. Capture the accent first;
+        // configuration edits only affect newly opened terminals.
+        let color: string | null = null;
+        try {
+            color = await loadTerminalWaveColor(tabType, meta);
+        } catch (error) {
+            if (!destroyed) console.warn("[terminal] environment group lookup failed:", error);
+        }
+        if (destroyed) return;
+        waveColor = color;
+        baseTermTheme = theme.currentTermTheme();
+
         const IMAGE_STORAGE_LIMIT_MB = app.isMobile ? 32 : 128;
         const IMAGE_PIXEL_LIMIT = app.isMobile ? 4_000_000 : 16_000_000;
 
@@ -1575,8 +1570,8 @@
             // users cannot select at all in mouse mode. Match iTerm2's Option-drag.
             macOptionClickForcesSelection: true,
             */
-            theme: { ...baseTermTheme, background: waveColor ? "#00000000" : baseTermTheme.background },
-            allowTransparency: true,
+            theme: terminalWaveTheme(baseTermTheme, !!waveColor),
+            allowTransparency: !!waveColor,
             // xterm 6 draws its own scrollbar at overviewRuler.width||14 (=14px),
             // out of reach of the global ::-webkit-scrollbar; pin it to the app's 6px.
             overviewRuler: { width: 6 },
@@ -1678,6 +1673,13 @@
             // 长按(选字)。代价：长按选中后再拖动会变成滚动而非扩展选区——移动端有
             // 块复制 / 发 AI 取文，这个取舍可接受。
             mobileTouchScrollCleanup = setupTouchScroll(containerEl, terminal);
+        }
+
+        // Metadata may resolve after activation; keep any focus the user moved meanwhile.
+        if (app.activeTabId() === tabId && !app.settingsActive()
+            && !showSearch && !app.snippetPickerOpen()
+            && (document.activeElement === focusBeforeInit || document.activeElement === document.body)) {
+            terminal.focus();
         }
 
         app.registerTerminalControls(tabId, {
@@ -1908,6 +1910,7 @@
             // in normal mode. Modified arrows always use CSI with params — SS3 has
             // no param form. That's the protocol, not a design choice.
             app.registerTerminalArrowSender((dir, mod) => {
+                if (!terminal) return;
                 const appMode = terminal.modes.applicationCursorKeysMode;
                 const seq = mod === 0
                     ? (appMode ? `\x1bO${dir}` : `\x1b[${dir}`)
@@ -1917,7 +1920,7 @@
             // Same re-own-on-activation as the writer above: the visible tab's
             // ⌨ button must always control this pane's helper, never a hidden
             // pane that happened to mount later.
-            if (softKbToggle) app.registerSoftKeyboardToggle(softKbToggle);
+            app.registerSoftKeyboardToggle(togglePaneKeyboard);
         }
     });
 
@@ -1961,6 +1964,7 @@
         resizeObs?.disconnect();
         ime229WorkaroundCleanup?.();
         ime229WorkaroundCleanup = undefined;
+        app.unregisterSoftKeyboardToggle(togglePaneKeyboard);
         mobileKeyboardCleanup?.();
         mobileTouchScrollCleanup?.();
         paintScheduler?.dispose();

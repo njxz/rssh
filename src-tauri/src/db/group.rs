@@ -73,7 +73,7 @@ fn reconcile_sync_filter_for_group_delete(conn: &rusqlite::Connection, id: &str)
 pub fn list(db: &Db) -> AppResult<Vec<Group>> {
     let conn = db.lock()?;
     let mut stmt = conn.prepare(
-        "SELECT id, name, color, sort_order, terminal_background FROM groups ORDER BY sort_order ASC, name ASC",
+        "SELECT id, name, color, sort_order, terminal_waves_enabled FROM groups ORDER BY sort_order ASC, name ASC",
     )?;
     let rows = stmt.query_map([], |row| {
         Ok(Group {
@@ -81,7 +81,7 @@ pub fn list(db: &Db) -> AppResult<Vec<Group>> {
             name: row.get(1)?,
             color: row.get(2)?,
             sort_order: row.get(3)?,
-            terminal_background: row.get(4)?,
+            terminal_waves_enabled: row.get(4)?,
         })
     })?;
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
@@ -90,7 +90,7 @@ pub fn list(db: &Db) -> AppResult<Vec<Group>> {
 pub fn get(db: &Db, id: &str) -> AppResult<Group> {
     let conn = db.lock()?;
     conn.query_row(
-        "SELECT id, name, color, sort_order, terminal_background FROM groups WHERE id = ?1",
+        "SELECT id, name, color, sort_order, terminal_waves_enabled FROM groups WHERE id = ?1",
         params![id],
         |row| {
             Ok(Group {
@@ -98,7 +98,7 @@ pub fn get(db: &Db, id: &str) -> AppResult<Group> {
                 name: row.get(1)?,
                 color: row.get(2)?,
                 sort_order: row.get(3)?,
-                terminal_background: row.get(4)?,
+                terminal_waves_enabled: row.get(4)?,
             })
         },
     )
@@ -108,15 +108,10 @@ pub fn get(db: &Db, id: &str) -> AppResult<Group> {
 pub fn insert_tx(conn: &rusqlite::Connection, g: &Group) -> AppResult<()> {
     validate_name(&g.name)?;
     let color = normalize_group_color(&g.color)?;
-    let background = g
-        .terminal_background
-        .as_deref()
-        .map(normalize_group_color)
-        .transpose()?;
     conn.execute(
-        "INSERT INTO groups (id, name, color, sort_order, terminal_background) VALUES (?1, ?2, ?3, ?4, ?5) \
-         ON CONFLICT(id) DO UPDATE SET name=excluded.name, color=excluded.color, sort_order=excluded.sort_order, terminal_background=excluded.terminal_background",
-        params![g.id, g.name, color, g.sort_order, background],
+        "INSERT INTO groups (id, name, color, sort_order, terminal_waves_enabled) VALUES (?1, ?2, ?3, ?4, ?5) \
+         ON CONFLICT(id) DO UPDATE SET name=excluded.name, color=excluded.color, sort_order=excluded.sort_order, terminal_waves_enabled=excluded.terminal_waves_enabled",
+        params![g.id, g.name, color, g.sort_order, g.terminal_waves_enabled],
     )?;
     Ok(())
 }
@@ -129,15 +124,10 @@ pub fn insert(db: &Db, g: &Group) -> AppResult<()> {
 pub fn update(db: &Db, g: &Group) -> AppResult<()> {
     validate_name(&g.name)?;
     let color = normalize_group_color(&g.color)?;
-    let background = g
-        .terminal_background
-        .as_deref()
-        .map(normalize_group_color)
-        .transpose()?;
     let conn = db.lock()?;
     conn.execute(
-        "UPDATE groups SET name=?1, color=?2, sort_order=?3, terminal_background=?5 WHERE id=?4",
-        params![g.name, color, g.sort_order, g.id, background],
+        "UPDATE groups SET name=?1, color=?2, sort_order=?3, terminal_waves_enabled=?4 WHERE id=?5",
+        params![g.name, color, g.sort_order, g.terminal_waves_enabled, g.id],
     )?;
     Ok(())
 }
@@ -195,7 +185,7 @@ mod tests {
             name: name.into(),
             color: "#FF0000".into(),
             sort_order: 0,
-            terminal_background: None,
+            terminal_waves_enabled: false,
         }
     }
 
@@ -216,38 +206,21 @@ mod tests {
     }
 
     #[test]
-    fn terminal_background_survives_database_and_serialization_roundtrips() {
+    fn group_waves_survive_insert_update_and_upsert() {
         let db = Db::open_in_memory().unwrap();
         let mut group = mk_group("prod", "production");
-        group.terminal_background = Some("#3b1518".into());
+        group.terminal_waves_enabled = true;
         insert(&db, &group).unwrap();
-        let stored = get(&db, "prod").unwrap();
-        assert_eq!(stored.terminal_background.as_deref(), Some("#3B1518"));
-        let payload = serde_json::to_value(&stored).unwrap();
-        let restored: Group = serde_json::from_value(payload).unwrap();
-        clear_all(&db).unwrap();
-        insert(&db, &restored).unwrap();
-        assert_eq!(
-            list(&db).unwrap()[0].terminal_background,
-            stored.terminal_background
-        );
-        group.terminal_background = None;
-        update(&db, &group).unwrap();
-        assert!(get(&db, "prod").unwrap().terminal_background.is_none());
-    }
+        assert!(get(&db, "prod").unwrap().terminal_waves_enabled);
+        assert!(list(&db).unwrap()[0].terminal_waves_enabled);
 
-    #[test]
-    fn legacy_groups_use_global_theme_and_invalid_backgrounds_are_rejected() {
-        let db = Db::open_in_memory().unwrap();
-        let mut group: Group = serde_json::from_value(serde_json::json!({
-            "id": "old", "name": "legacy", "color": "#FF0000", "sort_order": 0
-        }))
-        .unwrap();
-        assert!(group.terminal_background.is_none());
+        group.terminal_waves_enabled = false;
+        update(&db, &group).unwrap();
+        assert!(!get(&db, "prod").unwrap().terminal_waves_enabled);
+
+        group.terminal_waves_enabled = true;
         insert(&db, &group).unwrap();
-        group.terminal_background = Some("#fff; color:red".into());
-        assert!(update(&db, &group).is_err());
-        assert!(get(&db, "old").unwrap().terminal_background.is_none());
+        assert!(get(&db, "prod").unwrap().terminal_waves_enabled);
     }
 
     #[test]
