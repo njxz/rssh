@@ -14,6 +14,8 @@
     import * as syncStatus from "../stores/sync.svelte.ts";
     import * as ai from "../ai/store.svelte.ts";
     import * as theme from "../themes/store.svelte.ts";
+    import {loadTerminalWaveColor, terminalWaveTheme} from "../terminal/environment-wave.ts";
+    import EnvironmentWave from "./EnvironmentWave.svelte";
     import MobileKeybar from "./MobileKeybar.svelte";
     import {registerRsshOscHandlers} from "../osc/handler.ts";
     import {registerClipboardOscHandler} from "../osc/clipboard.ts";
@@ -96,6 +98,14 @@
         meta: Record<string, string>;
         onInitialConnectionFailure?: (tabId: string, error: unknown) => boolean;
     } = $props();
+
+    let waveColor = $state<string | null>(null);
+    let baseTermTheme = $state(theme.currentTermTheme());
+
+    $effect(() => {
+        const colors = terminalWaveTheme(baseTermTheme, !!waveColor);
+        if (terminal) terminal.options.theme = colors;
+    });
 
     let containerEl: HTMLDivElement;
     let paneEl: HTMLDivElement; // the .term-outer root — soft-keyboard inset target
@@ -513,7 +523,7 @@
             // fails. ClipboardItem receives the promise while the user gesture
             // is still active, so the async read does not break clipboard access.
             const pngPromise = app.loadCommandBlockRedaction(true)
-                .then((redaction) => renderBlocksToBlob(term, blocks, {}, fs, redaction))
+                .then((redaction) => renderBlocksToBlob(term, blocks, { theme: baseTermTheme }, fs, redaction))
                 .then((blob) => {
                     if (!blob) throw new Error("render produced no blob");
                     return blob;
@@ -621,6 +631,7 @@
     // The active pane's keyboard toggle, built by setupMobileSoftKeyboard and
     // registered in the activation effect (see below for why not at mount).
     let softKbToggle: (() => void) | null = null;
+    const togglePaneKeyboard = () => softKbToggle?.();
     let mobileTouchScrollCleanup: (() => void) | undefined;
 
     const isLocal = $derived(tabType === "local");
@@ -1504,7 +1515,6 @@
             else helper.setAttribute("style", originalHelperStyle);
             helper.removeEventListener("focus", onFocus);
             helper.removeEventListener("blur", onBlur);
-            if (softKbToggle) app.unregisterSoftKeyboardToggle(softKbToggle);
             softKbToggle = null;
             helper.removeEventListener("input", keepKeyboardHelperInView);
             helper.removeEventListener("keydown", keepKeyboardHelperInView);
@@ -1530,6 +1540,19 @@
     }
 
     onMount(async () => {
+        const focusBeforeInit = document.activeElement;
+        // Transparency is fixed when xterm opens. Capture the accent first;
+        // configuration edits only affect newly opened terminals.
+        let color: string | null = null;
+        try {
+            color = await loadTerminalWaveColor(tabType, meta);
+        } catch (error) {
+            if (!destroyed) console.warn("[terminal] environment group lookup failed:", error);
+        }
+        if (destroyed) return;
+        waveColor = color;
+        baseTermTheme = theme.currentTermTheme();
+
         const IMAGE_STORAGE_LIMIT_MB = app.isMobile ? 32 : 128;
         const IMAGE_PIXEL_LIMIT = app.isMobile ? 4_000_000 : 16_000_000;
 
@@ -1547,7 +1570,8 @@
             // users cannot select at all in mouse mode. Match iTerm2's Option-drag.
             macOptionClickForcesSelection: true,
             */
-            theme: theme.currentTermTheme(),
+            theme: terminalWaveTheme(baseTermTheme, !!waveColor),
+            allowTransparency: !!waveColor,
             // xterm 6 draws its own scrollbar at overviewRuler.width||14 (=14px),
             // out of reach of the global ::-webkit-scrollbar; pin it to the app's 6px.
             overviewRuler: { width: 6 },
@@ -1555,7 +1579,7 @@
         // Listener fires immediately with current theme (already applied above)
         // and on every palette change. Keep the unsubscribe for onDestroy.
         unsubscribeTheme = theme.registerXtermThemeListener((t) => {
-            if (terminal) terminal.options.theme = t;
+            baseTermTheme = t;
         });
         fitAddon = new FitAddon();
         searchAddon = new SearchAddon();
@@ -1649,6 +1673,13 @@
             // 长按(选字)。代价：长按选中后再拖动会变成滚动而非扩展选区——移动端有
             // 块复制 / 发 AI 取文，这个取舍可接受。
             mobileTouchScrollCleanup = setupTouchScroll(containerEl, terminal);
+        }
+
+        // Metadata may resolve after activation; keep any focus the user moved meanwhile.
+        if (app.activeTabId() === tabId && !app.settingsActive()
+            && !showSearch && !app.snippetPickerOpen()
+            && (document.activeElement === focusBeforeInit || document.activeElement === document.body)) {
+            terminal.focus();
         }
 
         app.registerTerminalControls(tabId, {
@@ -1879,6 +1910,7 @@
             // in normal mode. Modified arrows always use CSI with params — SS3 has
             // no param form. That's the protocol, not a design choice.
             app.registerTerminalArrowSender((dir, mod) => {
+                if (!terminal) return;
                 const appMode = terminal.modes.applicationCursorKeysMode;
                 const seq = mod === 0
                     ? (appMode ? `\x1bO${dir}` : `\x1b[${dir}`)
@@ -1888,7 +1920,7 @@
             // Same re-own-on-activation as the writer above: the visible tab's
             // ⌨ button must always control this pane's helper, never a hidden
             // pane that happened to mount later.
-            if (softKbToggle) app.registerSoftKeyboardToggle(softKbToggle);
+            app.registerSoftKeyboardToggle(togglePaneKeyboard);
         }
     });
 
@@ -1932,6 +1964,7 @@
         resizeObs?.disconnect();
         ime229WorkaroundCleanup?.();
         ime229WorkaroundCleanup = undefined;
+        app.unregisterSoftKeyboardToggle(togglePaneKeyboard);
         mobileKeyboardCleanup?.();
         mobileTouchScrollCleanup?.();
         paintScheduler?.dispose();
@@ -1952,7 +1985,7 @@
     });
 </script>
 
-<div class="term-outer" bind:this={paneEl}>
+<div class="term-outer" bind:this={paneEl} style="--term-bg: {baseTermTheme.background}">
     {#if showSearch}
         <div class="search-bar">
             <input
@@ -1991,6 +2024,7 @@
         </div>
     {/if}
     <div class="term-wrap" class:is-mobile={app.isMobile} class:no-block-bar={!app.commandBlockBar()}>
+        {#if waveColor}<EnvironmentWave color={waveColor} />{/if}
         <div class="xterm-host" bind:this={containerEl}></div>
         {#if backlogBytes > BACKLOG_INDICATOR_BYTES}
             <div class="backlog-badge">
@@ -2065,6 +2099,8 @@
 
 <style>
     .term-outer {
+        min-height: 0;
+        background: var(--term-bg);
         display: flex;
         flex-direction: column;
         width: 100%;
@@ -2072,19 +2108,16 @@
     }
 
     .term-wrap {
+        background: var(--term-bg);
         flex: 1;
         min-height: 0;
         position: relative;
     }
 
-    /* xterm.js paints theme.background into the row canvas, but the
-       .xterm-viewport scroll layer keeps its own background. When the
-       user turns off "terminal bg follows theme" and picks a preset
-       whose background differs from --bg, that viewport leaks a
-       frame-coloured ring around the rendered rows. Pin it to --term-bg
-       (kept in sync by themes/store.svelte.ts::writeTermVars). */
+    /* The opaque wrapper preserves the terminal palette. Transparent xterm
+       layers let the right-side accent sit behind glyphs without tinting them. */
     .term-wrap :global(.xterm-viewport) {
-        background-color: var(--term-bg) !important;
+        background-color: transparent !important;
     }
 
     .xterm-host {
