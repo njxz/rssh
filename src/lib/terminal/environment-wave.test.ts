@@ -3,11 +3,12 @@ import { groupWaveColor, wavePlaybackRate } from "./environment-wave";
 
 describe("group terminal waves", () => {
   it("starts quickly and continuously settles into slow motion", () => {
-    expect(wavePlaybackRate(0)).toBe(40);
-    expect(wavePlaybackRate(900)).toBe(10.75);
-    expect(wavePlaybackRate(1800)).toBe(1);
+    expect(wavePlaybackRate(0)).toBe(12);
+    expect(wavePlaybackRate(1000)).toBe(12);
+    expect(wavePlaybackRate(1500)).toBe(3.75);
+    expect(wavePlaybackRate(2000)).toBe(1);
     expect(wavePlaybackRate(60000)).toBe(1);
-    expect(wavePlaybackRate(-1)).toBe(40);
+    expect(wavePlaybackRate(-1)).toBe(12);
   });
   const production = {
     id: "prod", name: "Production", color: "#E05868", sort_order: 0,
