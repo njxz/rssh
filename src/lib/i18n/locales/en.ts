@@ -1077,8 +1077,8 @@ const en = {
   "forward.local_port_socks5": "Local Port (SOCKS5 proxy)",
   "forward.name_placeholder": "Web Forward",
   // Groups
-  "group.terminal_background": "Terminal bottom waves",
-  "group.terminal_background_hint": "Show group-color gradient waves below SSH, Telnet and serial sessions. The terminal keeps its current theme.",
+  "group.terminal_background": "Terminal wave background",
+  "group.terminal_background_hint": "Blend group-color gradient waves into the right side of SSH, Telnet and serial terminals without taking up space.",
   "group.preview": "Session preview",
   "group.new": "+ New Group",
   "group.empty": "No groups yet",

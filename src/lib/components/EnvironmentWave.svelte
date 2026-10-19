@@ -1,67 +1,78 @@
 <script lang="ts">
-  let { color, name, foreground = "var(--text)", compact = false, showName = true }: {
-    color: string;
-    name: string;
-    foreground?: string;
-    compact?: boolean;
-    showName?: boolean;
-  } = $props();
+  import { onMount } from "svelte";
+  import { wavePlaybackRate, WAVE_STARTUP_MS } from "../terminal/environment-wave.ts";
 
+  let { color }: { color: string } = $props();
   const uid = $props.id();
+  let surface: HTMLDivElement;
+
+  onMount(() => {
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let animations: Animation[] = [];
+    let surge: Animation | undefined;
+    let frame = 0;
+    function stop() {
+      cancelAnimationFrame(frame);
+      animations.forEach(animation => animation.cancel());
+      animations = [];
+      surge?.cancel();
+    }
+    function start() {
+      stop();
+      if (preference.matches) return;
+      animations = Array.from(surface.querySelectorAll("svg")).map((layer, index) =>
+        layer.animate([
+          { transform: "translateY(0)" },
+          { transform: "translateY(-50%)" },
+        ], { duration: index ? 60_000 : 48_000, iterations: Infinity, easing: "linear" }));
+      surge = surface.animate([
+        { transform: "scaleX(1.65)", opacity: 1 },
+        { transform: "scaleX(1)", opacity: 0.75 },
+      ], { duration: WAVE_STARTUP_MS, easing: "cubic-bezier(0.16, 1, 0.3, 1)", fill: "forwards" });
+      const started = performance.now();
+      function settle(now: number) {
+        const elapsed = now - started;
+        animations.forEach(animation => animation.updatePlaybackRate(wavePlaybackRate(elapsed)));
+        if (elapsed < WAVE_STARTUP_MS) frame = requestAnimationFrame(settle);
+      }
+      settle(started);
+    }
+    start();
+    preference.addEventListener("change", start);
+    return () => { stop(); preference.removeEventListener("change", start); };
+  });
 </script>
 
-<div class="environment-wave" class:compact style:--group-wave-color={color} style:color={foreground}>
-  <svg viewBox="0 0 1440 160" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-    <defs>
-      <linearGradient id={`${uid}-fill`} x1="0" y1="0" x2="1" y2="0.8">
-        <stop offset="0%" stop-color="var(--group-wave-color)" stop-opacity="0.18" />
-        <stop offset="52%" stop-color="var(--group-wave-color)" stop-opacity="0.38" />
-        <stop offset="100%" stop-color="var(--group-wave-color)" stop-opacity="0.72" />
-      </linearGradient>
-      <linearGradient id={`${uid}-back`} x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="var(--group-wave-color)" stop-opacity="0.10" />
-        <stop offset="100%" stop-color="var(--group-wave-color)" stop-opacity="0.24" />
-      </linearGradient>
-    </defs>
-    <path d="M0 45 C180 -8 245 14 410 64 S650 18 810 58 S1130 73 1260 43 S1370 26 1440 28 V160 H0 Z" fill={`url(#${uid}-back)`} />
-    <path d="M0 67 C210 2 300 15 515 67 S830 112 1040 87 S1270 30 1440 60 V160 H0 Z" fill={`url(#${uid}-fill)`} />
-  </svg>
-  {#if showName}
-    <div class="group-name" title={name}><span aria-hidden="true">—</span> {name}</div>
-  {/if}
+<div bind:this={surface} class="environment-wave" style:--group-wave-color={color} aria-hidden="true">
+  {#each [0, 1] as layer}
+    <svg viewBox="0 0 200 800" preserveAspectRatio="none" focusable="false" class:back={layer === 1}>
+      <defs>
+        <linearGradient id={`${uid}-${layer}`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="var(--group-wave-color)" stop-opacity="0" />
+          <stop offset="60%" stop-color="var(--group-wave-color)" stop-opacity={layer ? "0.06" : "0.12"} />
+          <stop offset="100%" stop-color="var(--group-wave-color)" stop-opacity={layer ? "0.12" : "0.26"} />
+        </linearGradient>
+      </defs>
+      <g fill={`url(#${uid}-${layer})`}>
+        <path d="M100 0 C20 66 20 134 100 200 C180 266 180 334 100 400 C20 466 20 534 100 600 C180 666 180 734 100 800 H200 V0 Z" />
+      </g>
+    </svg>
+  {/each}
 </div>
 
 <style>
   .environment-wave {
-    position: relative;
-    flex: 0 1 auto;
-    width: 100%;
-    height: min(15%, 150px);
-    min-height: 0;
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: min(30%, 300px);
+    transform-origin: right center;
     overflow: hidden;
     pointer-events: none;
     user-select: none;
+    z-index: 0;
+    opacity: 0.75;
   }
-  svg { display: block; width: 100%; height: 100%; }
-  .group-name {
-    position: absolute;
-    right: 24px;
-    bottom: 16px;
-    max-width: calc(100% - 48px);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-family: var(--term-font-family, monospace);
-    font-size: 12px;
-    letter-spacing: 0.08em;
-    color: inherit;
-    opacity: 0.72;
-  }
-  .group-name span { margin-right: 8px; opacity: 0.5; }
-  .compact { height: 56px; }
-  .compact .group-name { right: 12px; bottom: 10px; font-size: 11px; }
-  @media (max-width: 600px) {
-    .environment-wave { max-height: 48px; }
-    .group-name { right: 16px; bottom: 10px; font-size: 11px; }
-  }
+  svg { position: absolute; top: 0; right: 0; width: 100%; height: 200%; filter: blur(7px); }
+  svg.back { width: 78%; opacity: 0.65; }
+  @media (max-width: 600px) { .environment-wave { width: 28%; } }
 </style>

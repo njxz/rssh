@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const invokeMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
+vi.mock("../terminal/environment-import.ts", () => ({
+  withEnvironmentUpdates: (operation: () => Promise<unknown>) => operation(),
+}));
 
 type Metadata = { version: number; config_digest: string };
 type ProviderObservation = {

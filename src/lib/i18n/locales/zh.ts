@@ -1080,8 +1080,8 @@ const zh: Messages = {
   "forward.local_port_socks5": "本地端口（SOCKS5 代理）",
   "forward.name_placeholder": "Web Forward",
   // 分组
-  "group.terminal_background": "终端底部波浪",
-  "group.terminal_background_hint": "在此分组的 SSH、Telnet 和串口会话底部显示波浪渐变，颜色跟随分组；终端主体保留当前配色。",
+  "group.terminal_background": "终端波浪背景",
+  "group.terminal_background_hint": "在此分组的 SSH、Telnet 和串口终端右侧显示分组颜色的渐变波浪，不占用终端空间。",
   "group.preview": "会话预览",
   "group.new": "+ 新建分组",
   "group.empty": "暂无分组",

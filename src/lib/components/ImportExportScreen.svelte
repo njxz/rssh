@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { withEnvironmentUpdates } from "../terminal/environment-import.ts";
+  import { invalidateConfiguration } from "../stores/sync.svelte.ts";
   import { invoke } from "@tauri-apps/api/core";
   import { t, errMsg } from "../i18n/index.svelte.ts";
   import { toast } from "../stores/toast.svelte.ts";
@@ -37,7 +39,9 @@
     try {
       const f = await pickTextFile({ accept: ".json,application/json" });
       if (f) {
-        await invoke("import_config", { json: f.text });
+        try {
+          await withEnvironmentUpdates(() => invoke("import_config", { json: f.text }));
+        } finally { invalidateConfiguration(); }
         msg = t("import_export.imported_from", { path: f.name });
       } else {
         msg = "";

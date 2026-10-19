@@ -1,15 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { groupWaveColor, environmentWaveLayout } from "./environment-wave";
+import { groupWaveColor, wavePlaybackRate } from "./environment-wave";
 
 describe("group terminal waves", () => {
-  it("keeps small and nested split panes usable while preserving normal-size decorations", () => {
-    for (const height of [0, 40, 107, 239]) {
-      expect(environmentWaveLayout(height)).toEqual({visible: false, showName: false});
-    }
-    expect(environmentWaveLayout(240)).toEqual({visible: true, showName: false});
-    expect(environmentWaveLayout(311)).toEqual({visible: true, showName: false});
-    expect(environmentWaveLayout(320)).toEqual({visible: true, showName: true});
-    expect(environmentWaveLayout(800)).toEqual({visible: true, showName: true});
+  it("starts quickly and continuously settles into slow motion", () => {
+    expect(wavePlaybackRate(0)).toBe(40);
+    expect(wavePlaybackRate(900)).toBe(10.75);
+    expect(wavePlaybackRate(1800)).toBe(1);
+    expect(wavePlaybackRate(60000)).toBe(1);
+    expect(wavePlaybackRate(-1)).toBe(40);
   });
   const production = {
     id: "prod", name: "Production", color: "#E05868", sort_order: 0,

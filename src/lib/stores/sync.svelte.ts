@@ -1,3 +1,4 @@
+import { withEnvironmentUpdates } from "../terminal/environment-import.ts";
 import { invoke } from "@tauri-apps/api/core";
 
 const INITIAL_DELAY_MS = 10_000;
@@ -220,7 +221,7 @@ async function runCheckPass(): Promise<void> {
   try {
     await refreshLocalMetadata();
     const localRevision = _localRevision;
-    const result = await invoke<SyncCheckResult>("sync_check_remotes");
+    const result = await withEnvironmentUpdates(() => invoke<SyncCheckResult>("sync_check_remotes"));
     const revisionBeforeReconcile = _configurationRevision;
     // The backend returns the snapshot from after all automatic-pull attempts,
     // including partial imports that report an error. If another local refresh

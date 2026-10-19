@@ -14,7 +14,7 @@
     import * as syncStatus from "../stores/sync.svelte.ts";
     import * as ai from "../ai/store.svelte.ts";
     import * as theme from "../themes/store.svelte.ts";
-    import {groupWaveColor, environmentWaveLayout} from "../terminal/environment-wave.ts";
+    import {groupWaveColor} from "../terminal/environment-wave.ts";
     import {watchEnvironmentGroup} from "../terminal/watch-environment-group.ts";
     import EnvironmentWave from "./EnvironmentWave.svelte";
     import MobileKeybar from "./MobileKeybar.svelte";
@@ -102,8 +102,6 @@
 
     let environmentGroup = $state<app.Group | null>(null);
     let waveColor = $derived(groupWaveColor(environmentGroup));
-    let paneHeight = $state(0);
-    let waveLayout = $derived(environmentWaveLayout(paneHeight));
     let baseTermTheme = $state(theme.currentTermTheme());
 
     $effect(() => {
@@ -123,7 +121,7 @@
     });
 
     $effect(() => {
-        const colors = baseTermTheme;
+        const colors = { ...baseTermTheme, background: waveColor ? "#00000000" : baseTermTheme.background };
         if (terminal) terminal.options.theme = colors;
     });
 
@@ -1577,7 +1575,8 @@
             // users cannot select at all in mouse mode. Match iTerm2's Option-drag.
             macOptionClickForcesSelection: true,
             */
-            theme: baseTermTheme,
+            theme: { ...baseTermTheme, background: waveColor ? "#00000000" : baseTermTheme.background },
+            allowTransparency: true,
             // xterm 6 draws its own scrollbar at overviewRuler.width||14 (=14px),
             // out of reach of the global ::-webkit-scrollbar; pin it to the app's 6px.
             overviewRuler: { width: 6 },
@@ -1649,9 +1648,6 @@
         // Resize for the whole pane lifetime, even if async setup or the
         // initial connection exits early.
         resizeObs = new ResizeObserver((entries) => {
-            // Reuse the existing pane lifecycle observer. CSS size containment
-            // would change the containing block of fixed terminal context menus.
-            paneHeight = paneEl.clientHeight;
             // Skip fitting when the container is hidden (display:none
             // collapses dimensions to zero) — fitting at 0×0 corrupts
             // xterm's column count and causes the narrow-tab bug.
@@ -2024,6 +2020,7 @@
         </div>
     {/if}
     <div class="term-wrap" class:is-mobile={app.isMobile} class:no-block-bar={!app.commandBlockBar()}>
+        {#if waveColor}<EnvironmentWave color={waveColor} />{/if}
         <div class="xterm-host" bind:this={containerEl}></div>
         {#if backlogBytes > BACKLOG_INDICATOR_BYTES}
             <div class="backlog-badge">
@@ -2083,9 +2080,6 @@
             {/each}
         {/if}
     </div>
-    {#if waveColor && environmentGroup && waveLayout.visible}
-        <EnvironmentWave color={waveColor} name={environmentGroup.name} foreground={baseTermTheme.foreground} showName={waveLayout.showName} />
-    {/if}
     {#if ctxMenu}
         <BlockContextMenu
             x={ctxMenu.x}
@@ -2116,14 +2110,10 @@
         position: relative;
     }
 
-    /* xterm.js paints theme.background into the row canvas, but the
-       .xterm-viewport scroll layer keeps its own background. When the
-       user turns off "terminal bg follows theme" and picks a preset
-       whose background differs from --bg, that viewport leaks a
-       frame-coloured ring around the rendered rows. Pin it to --term-bg
-       (kept in sync by themes/store.svelte.ts::writeTermVars). */
+    /* The opaque wrapper preserves the terminal palette. Transparent xterm
+       layers let the right-side accent sit behind glyphs without tinting them. */
     .term-wrap :global(.xterm-viewport) {
-        background-color: var(--term-bg) !important;
+        background-color: transparent !important;
     }
 
     .xterm-host {

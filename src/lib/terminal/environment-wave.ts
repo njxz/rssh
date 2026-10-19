@@ -6,6 +6,10 @@ export function groupWaveColor(group?: Group | null): string | null {
   return group.color;
 }
 
-export function environmentWaveLayout(paneHeight: number): { visible: boolean; showName: boolean } {
-  return { visible: paneHeight >= 240, showName: paneHeight >= 320 };
+export const WAVE_STARTUP_MS = 1_800;
+
+/** A short energetic surge settles continuously into the ambient drift. */
+export function wavePlaybackRate(elapsedMs: number): number {
+  const remaining = 1 - Math.min(1, Math.max(0, elapsedMs / WAVE_STARTUP_MS));
+  return 1 + 39 * remaining ** 2;
 }

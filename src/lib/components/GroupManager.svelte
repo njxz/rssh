@@ -107,7 +107,7 @@
   {#if formBackgroundEnabled}
     <div class="terminal-preview" style:background={previewTheme.background} style:color={previewTheme.foreground}>
       <div class="preview-content">{formName || t("group.name_placeholder")} ~ # <span>{t("group.preview")}</span></div>
-      <EnvironmentWave color={formColor} name={formName || t("group.name_placeholder")} foreground={previewTheme.foreground} compact />
+      <EnvironmentWave color={formColor} />
     </div>
   {/if}
 {/snippet}
@@ -193,8 +193,13 @@
   .page { padding: 24px; }
   .background-toggle { display: flex; align-items: center; gap: 8px; }
   .background-hint { color: var(--text-sub); font-size: 12px; margin: 0; }
-  .terminal-preview { border-radius: 4px; overflow: hidden; font-family: monospace; }
-  .preview-content { padding: 12px 12px 20px; overflow-wrap: anywhere; }
+  .terminal-preview {
+    position: relative;
+    overflow: hidden;
+    border-radius: 4px;
+    font-family: monospace;
+  }
+  .preview-content { position: relative; z-index: 1; padding: 12px 12px 20px; overflow-wrap: anywhere; }
   .toolbar { display: flex; justify-content: flex-end; margin-bottom: 16px; }
   .item-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
   .item-info { display: flex; align-items: center; gap: 10px; min-width: 0; }
